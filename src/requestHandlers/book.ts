@@ -1,109 +1,131 @@
-import { assert } from "superstruct";
-import { prisma } from "../db";
-import { HttpError } from "../error";
+import { prisma } from '../db';
+import type { Request, Response } from 'express';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
-import { Request, Response } from "express";
-import {
-  BookCreationData,
-  BookGetParams,
-  BookUpdateData,
-} from "../validation/book";
-import { Prisma } from "@prisma/client";
+import { NotFoundError } from '../error';
 
-export async function get_all(req: Request, res: Response)
-{
-  assert(req.query, BookGetParams);
-  const { title } = req.query;
+import { assert } from 'superstruct';
+import { BookCreationData, BookGetAllQuery, BookUpdateData } from '../validation/book';
+import { Prisma } from '@prisma/client';
+
+export async function get_all(req: Request, res: Response) {
+  assert(req.query, BookGetAllQuery);
+  const { title, include, skip, take } = req.query;
+  const filter: Prisma.BookWhereInput = {};
+  if (title) {
+    filter.title = { contains: String(title) };
+  }
+  const assoc: Prisma.BookInclude = {};
+  if (include === 'author') {
+    assoc.author = { select: { id: true, firstname: true, lastname: true } };
+  }
   const books = await prisma.book.findMany({
-    where: {
-      title: {
-        contains: title?.toString(),
-      },
-    },
+    where: filter,
+    include: assoc,
+    orderBy: { title: 'asc' },
+    skip: skip ? Number(skip) : undefined,
+    take: take ? Number(take) : undefined
   });
+  const bookCount = await prisma.book.count({ where: filter });
+  res.header('X-Total-Count', String(bookCount));
   res.json(books);
-}
+};
 
-export async function get_all_of_author(req: Request, res: Response)
-{
-  assert(req.query, BookGetParams);
-  const title: string = req.query.title || "";
-  const authorIncludes: Prisma.AuthorInclude = {
-    books: {
-      where: {
-        title: {
-          contains: title.toString(),
-        },
-      },
-      select: {
-        title: true,
-        publication_year: true,
-      },
-    },
-  };
-  const author = await prisma.author.findUnique({
-    where: {
-      id: parseInt(req.params.author_id),
-    },
-    include: authorIncludes,
-  });
-  if (author == null)
-  {
-    throw new HttpError("Author not found", 404);
-  }
-  else
-  {
-    res.status(200).json(author.books);
-  }
-}
-
-export async function get_one(req: Request, res: Response)
-{
+export async function get_one(req: Request, res: Response) {
   const book = await prisma.book.findUnique({
     where: {
-      id: parseInt(req.params.book_id),
-    },
+      id: Number(req.params.book_id)
+    }
   });
+  if (!book) {
+    throw new NotFoundError('Book not found');
+  }
   res.json(book);
-}
+};
 
-export async function create_one_of_author(req: Request, res: Response)
-{
+export async function get_all_of_author(req: Request, res: Response) {
+  assert(req.query, BookGetAllQuery);
+  const { title, skip, take } = req.query;
+  const filter: Prisma.BookWhereInput = {};
+  if (title) {
+    filter.title = { contains: String(title) };
+  }
+  const author = await prisma.author.findUnique({
+    where: {
+      id: Number(req.params.author_id),
+    },
+    include: {
+      books: {
+        where: filter,
+        skip: skip ? Number(skip) : undefined,
+        take: take ? Number(take) : undefined
+      }
+    }
+  });
+  if (!author) {
+    throw new NotFoundError('Author not found');
+  }
+  filter.authorId = author.id;
+  const bookCount = await prisma.book.count({ where: filter });
+  res.header('X-Total-Count', String(bookCount));
+  res.json(author.books);
+};
+
+export async function create_one_of_author(req: Request, res: Response) {
   assert(req.body, BookCreationData);
-  const book = await prisma.book.create({
-    data: {
-      ...req.body,
-      author: {
-        connect: {
-          id: parseInt(req.params.author_id),
-        },
-      },
-    },
-  });
-  res.status(201).json(book);
-}
+  try {
+    const book = await prisma.book.create({
+      data: {
+        ...req.body,
+        author: {
+          connect: {
+            id: Number(req.params.author_id)
+          }
+        }
+      }
+    });
+    res.status(201).json(book);
+  }
+  catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new NotFoundError('Author not found');
+    }
+    throw err;
+  }
+};
 
-export async function update_one(req: Request, res: Response)
-{
+export async function update_one(req: Request, res: Response) {
   assert(req.body, BookUpdateData);
-  const { title: bookTitle } = req.body;
-  await prisma.book.update({
-    where: {
-      id: parseInt(req.params.book_id),
-    },
-    data: {
-      title: bookTitle,
-    },
-  });
-  res.end();
-}
+  try {
+    const book = await prisma.book.update({
+      where: {
+        id: Number(req.params.book_id)
+      },
+      data: req.body
+    });
+    res.json(book);
+  }
+  catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new NotFoundError('Book not found');
+    }
+    throw err;
+  }
+};
 
-export async function delete_one(req: Request, res: Response)
-{
-  await prisma.book.delete({
-    where: {
-      id: parseInt(req.params.book_id),
-    },
-  });
-  res.status(204).end();
-}
+export async function delete_one(req: Request, res: Response) {
+  try {
+    await prisma.book.delete({
+      where: {
+        id: Number(req.params.book_id)
+      }
+    });
+    res.status(204).send();
+  }
+  catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new NotFoundError('Book not found');
+    }
+    throw err;
+  }
+};

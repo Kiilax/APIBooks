@@ -1,115 +1,91 @@
-import { prisma } from "../db";
-import { HttpError } from "../error";
-import { Request, Response } from "express";
-import { assert, unknown } from "superstruct";
-import {
-  AuthorCreationData,
-  AuthorsGetParams,
-  AuthorUpdateData,
-} from "../validation/author";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { prisma } from '../db';
+import type { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
-// REQUEST PARAMS
-// REQUEST QUERY
-{
-  lastname: "husser";
-  age: "16";
-}
+import { NotFoundError } from '../error';
 
-// REQUEST BODY
+import { assert } from 'superstruct';
+import { AuthorCreationData, AuthorUpdateData, AuthorGetAllQuery } from '../validation/author';
 
-export async function get_all(req: Request, res: Response)
-{
-  assert(req.query, AuthorsGetParams);
-  const { lastname, firstname } = req.query;
-  const page: number = Number(req.query.page || "1") - 1;
-  const take: number = Number(req.query.take || "5");
-
+export async function get_all(req: Request, res: Response) {
+  assert(req.query, AuthorGetAllQuery);
+  const { lastname, hasBooks, include, skip, take } = req.query;
+  const filter: Prisma.AuthorWhereInput = {};
+  if (lastname) {
+    filter.lastname = { contains: String(lastname) };
+  }
+  if (hasBooks === 'true') {
+    filter.books = { some: {} };
+  }
+  const assoc: Prisma.AuthorInclude = {};
+  if (include === 'books') {
+    assoc.books = { select: { id: true, title: true }, orderBy: { title: 'asc' } };
+  }
   const authors = await prisma.author.findMany({
-    where: {
-      lastname: {
-        contains: lastname?.toString(),
-      },
-      firstname: {
-        contains: firstname?.toString(),
-      },
-    },
-    orderBy: {
-      lastname: "asc",
-    },
-    take,
-    skip: take * page,
+    where: filter,
+    include: assoc,
+    orderBy: { lastname: 'asc' },
+    skip: skip ? Number(skip) : undefined,
+    take: take ? Number(take) : undefined
   });
+  const authorCount = await prisma.author.count({ where: filter });
+  res.header('X-Total-Count', String(authorCount));
   res.json(authors);
-}
+};
 
-export async function get_one(req: Request, res: Response)
-{
+export async function get_one(req: Request, res: Response) {
   const author = await prisma.author.findUnique({
     where: {
-      id: parseInt(req.params.author_id),
-    },
+      id: Number(req.params.author_id)
+    }
   });
-  if (author == null)
-  {
-    throw new HttpError("Author not found", 404);
+  if (!author) {
+    throw new NotFoundError('Author not found');
   }
-  else
-  {
-    res.status(200).json(author);
-  }
-}
+  res.json(author);
+};
 
-export async function create_one(req: Request, res: Response)
-{
+export async function create_one(req: Request, res: Response) {
   assert(req.body, AuthorCreationData);
   const author = await prisma.author.create({
-    data: req.body,
+    data: req.body
   });
   res.status(201).json(author);
-}
+};
 
-export async function update_one(req: Request, res: Response)
-{
+export async function update_one(req: Request, res: Response) {
   assert(req.body, AuthorUpdateData);
-  try
-  {
+  try {
     const author = await prisma.author.update({
       where: {
-        id: parseInt(req.params.author_id),
+        id: Number(req.params.author_id)
       },
-      data: req.body,
+      data: req.body
     });
     res.json(author);
   }
-  catch (e: unknown)
-  {
-    // console.log(e);
-    if (e instanceof PrismaClientKnownRequestError && e.code === "P2025")
-    {
-      throw new HttpError("Author not found", 404);
+  catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new NotFoundError('Author not found');
     }
-    throw e;
+    throw err;
   }
-}
+};
 
-export async function delete_one(req: Request, res: Response)
-{
-  try
-  {
+export async function delete_one(req: Request, res: Response) {
+  try {
     await prisma.author.delete({
       where: {
-        id: parseInt(req.params.author_id),
-      },
+        id: Number(req.params.author_id)
+      }
     });
-    res.status(204).end();
+    res.status(204).send();
   }
-  catch (e: unknown)
-  {
-    if (e instanceof PrismaClientKnownRequestError && e.code === "P2025")
-    {
-      throw new HttpError("Author not found", 404);
+  catch (err: unknown) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === 'P2025') {
+      throw new NotFoundError('Author not found');
     }
-    throw e;
+    throw err;
   }
-}
+};

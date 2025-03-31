@@ -1,5 +1,5 @@
 {
-  "name": "books",
+  "name": "w41-live",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -7,30 +7,20 @@
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts"
   },
-  "prettier": {
-    "plugins": [
-      "prettier-plugin-brace-style"
-    ],
-    "braceStyle": "allman"
-  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
-    "@types/node": "^22.10.10",
+    "@types/node": "^22.10.7",
     "@types/validator": "^13.12.2",
-    "prettier": "^3.4.2",
-    "prettier-plugin-brace-style": "^0.7.2",
-    "prisma": "^6.5.0",
+    "prisma": "^6.2.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
-    "cors": "^2.8.5",
+    "@prisma/client": "^6.2.1",
     "express": "^5.0.1",
     "superstruct": "^2.0.2",
     "validator": "^13.12.0"

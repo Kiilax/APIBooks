@@ -7,27 +7,27 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
 }
 
 model Author {
-  id Int @id @default(autoincrement())
+  id        Int    @id @default(autoincrement())
   firstname String
-  lastname String
-  books Book[]
+  lastname  String
+  books     Book[]
 }
 
 model Book {
-  id Int @id @default(autoincrement())
-  title String
+  id               Int    @id @default(autoincrement())
+  title            String
   publication_year Int?
-  tags Tag[]
-  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  authorId Int
+  author           Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId         Int
+  tags             Tag[]
 }
 
 model Tag {
-  id Int @id @default(autoincrement())
-  name String @unique
+  id    Int    @id @default(autoincrement())
+  name  String @unique
   books Book[]
 }
